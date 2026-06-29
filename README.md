@@ -1,264 +1,411 @@
 # TriAlign-UDA
-### Multi-Term Statistical and Semantic Alignment for Unsupervised Domain Adaptation in Colon Histopathology
 
-TriAlign-UDA is a **multi-term feature alignment based Unsupervised Domain Adaptation (UDA) approach developed for histopathological images**.
+### Hybrid Domain Adaptation for Histopathology Foundation Model Features
 
-The method is designed to address the **domain shift problem** that occurs between different datasets and has been specifically evaluated on **colorectal cancer histopathology**.
+TriAlign-UDA is a **hybrid feature-level Unsupervised Domain Adaptation (UDA) framework developed for histopathology foundation model features**.
 
-TriAlign-UDA performs adaptation between the following datasets:
+The method is designed to address the **domain shift problem** caused by differences in staining protocols, scanner conditions, tissue preparation workflows, and data collection settings across datasets.
 
-- **Source Domain:** NCT-CRC-HE
-- **Target Domain:** TCGA (COAD, READ)
+TriAlign-UDA has been specifically evaluated for **colorectal cancer histopathology** and performs adaptation between the following domains:
 
-The method improves cross-domain generalization by simultaneously optimizing **class discriminability**, **statistical distribution alignment**, and **semantic prototype consistency**.
+- **Source Domain:** NCT-CRC-HE-100K
+- **Target Domain:** TCGA-COAD / TCGA-READ
+- **External Evaluation Set:** CRC-VAL-HE-7K
+
+The framework improves cross-domain generalization by jointly optimizing:
+
+- **source-domain class discriminability**
+- **statistical distribution alignment**
+- **prototype-based semantic preservation**
+- **adversarial domain alignment**
 
 ---
 
 # Architectural Overview
 
 <p align="center">
-<img src="FIGURES/pipeline2.PNG" width="950">
+  <img src="FIGURES/pipeline2.png" width="950">
 </p>
 
-TriAlign-UDA consists of three main components:
+TriAlign-UDA operates on **frozen histopathology foundation model representations** and consists of three main stages/components:
 
 ### 1. Frozen Feature Backbone
 
-The model uses a **pretrained UNI2-H encoder**.
+The model uses a **pretrained UNI2-H encoder** as the feature extractor.
 
 The backbone:
 
-- is frozen
-- preserves general histopathological representations
+- is completely frozen
+- produces fixed **1536-dimensional patch-level feature representations**
 - is not updated during domain adaptation
+- preserves general histopathological representation capacity
+
+All source, target, and evaluation patches are first converted into feature vectors using the frozen UNI2-H encoder. The adaptation stage is then performed **only at the feature level**.
 
 ---
 
 ### 2. Trainable Feature Adapter
 
-The adapter layer is the core component where domain adaptation occurs.
+The core adaptation module is a **bottleneck residual adapter** that transforms frozen features in a parameter-efficient manner.
 
-Its responsibilities include:
+Its structure is:
 
-- reducing domain shift
-- creating a shared feature space
-- aligning target domain features with the source domain
+```text
+1536 → 96 → 1536
+```
+
+For an input feature vector `x`, the adapted representation is defined as:
+
+```text
+z = x + A(x)
+```
+
+where `A(x)` denotes the adapter transformation.
+
+The adapter:
+
+- learns a limited residual correction on frozen features
+- reduces domain shift between source and target domains
+- creates a shared feature space
+- avoids retraining the large foundation model encoder
 
 ---
 
-### 3. Classification Head
+### 3. Classification and Domain Alignment Heads
 
-The classifier is trained **using labeled source domain data**.
+The adapted feature representation is passed to two trainable heads:
 
-This layer:
+#### Classification Head
+
+The classifier is trained **only using labeled source-domain data**.
+
+This head:
 
 - preserves class discriminability
 - provides supervised learning during adaptation
+- performs **nine-class tissue classification**
+
+#### Domain Discriminator (GRL)
+
+TriAlign-UDA also includes a **domain discriminator with a Gradient Reversal Layer (GRL)**.
+
+This component:
+
+- distinguishes source and target features
+- encourages domain-invariant feature learning through adversarial training
+- uses only source/target domain labels
+- does **not** use target-domain tissue labels or pseudo-labels
 
 ---
 
 # Datasets
 
-TriAlign-UDA performs domain adaptation between two histopathology datasets.
+TriAlign-UDA performs feature-level domain adaptation between colorectal histopathology datasets.
 
 <p align="center">
-<img src="FIGURES/NCT-and-TCGA.png" width="900">
+  <img src="FIGURES/NCT-and-TCGA.png" width="900">
 </p>
 
 ## Source Domain
 
-**NCT-CRC-HE**
+**NCT-CRC-HE-100K**
 
-Contains 9 histopathological tissue classes:
+The labeled source domain consists of 9 histopathological tissue classes:
 
 | Abbreviation | Description |
 |---|---|
-ADI | Adipose Tissue
-BACK | Background
-DEB | Debris
-LYM | Lymphocytes
-MUC | Mucus
-MUS | Smooth Muscle
-NORM | Normal Colon Mucosa
-STR | Stroma
-TUM | Tumor Epithelium
+| ADI | Adipose Tissue |
+| BACK | Background |
+| DEB | Debris |
+| LYM | Lymphocytes |
+| MUC | Mucus |
+| MUS | Smooth Muscle |
+| NORM | Normal Colon Mucosa |
+| STR | Stroma |
+| TUM | Tumor Epithelium |
 
-The following subsets are used:
+The source dataset is stratified into:
 
-- **NCT-CRC-HE-100K**
-- **CRC-VAL-HE-7K**
+- **Source training split:** 90%
+- **Source validation split:** 10%
+
+The **source validation split** is used only for **checkpoint selection** based on **Macro-F1**.
 
 ---
 
 ## Target Domain
 
-**TCGA (COAD, READ)**
+**TCGA-COAD / TCGA-READ**
 
-- consists of whole slide histopathology images
-- **labels are not used during training**
-- grid-based patch extraction is applied
+The target domain is derived from colorectal cancer whole-slide images obtained from TCGA.
+
+The target domain:
+
+- consists of histopathology whole-slide image patches
+- is treated as **completely unlabeled**
+- does **not** use class labels during training
+- does **not** use pseudo-labels
+- is used only for unsupervised feature-level alignment
+
+To preserve comparability across experiments, a fixed subset of **10,000 target patches** is used during adaptation.
+
+---
+
+## External Evaluation Set
+
+**CRC-VAL-HE-7K**
+
+CRC-VAL-HE-7K is used as an **independent external evaluation dataset**.
+
+It is kept completely separate from:
+
+- training
+- domain adaptation
+- hyperparameter selection
+- checkpoint selection
+
+This dataset is used **only for final external evaluation**.
 
 ---
 
 # Multi-Term Alignment Strategy of TriAlign-UDA
 
-TriAlign-UDA employs an optimization strategy that combines five different loss functions.
+TriAlign-UDA employs a **hybrid feature-level adaptation objective** that combines complementary alignment mechanisms.
 
-The total loss function is defined as:
+The total loss is defined as:
 
+```text
+L_total(e) =
+L_CE
++ λc(e) * L_CORAL
++ λm(e) * L_MK-MMD
++ 1[e ≥ 3] * λp * L_Proto
++ λa(e) * L_Adv
 ```
-L_total =
-λc  * CrossEntropy
-+ λcl * CORAL
-+ λm  * MK-MMD
-+ λp  * Prototype Contrastive
-+ λs  * Stain Consistency
-```
 
-These losses provide complementary alignment mechanisms.
+These terms provide:
+
+- **source-supervised classification**
+- **covariance-based statistical alignment**
+- **kernel-based distribution alignment**
+- **prototype-based semantic preservation**
+- **adversarial domain alignment**
+
+The auxiliary alignment terms are gradually introduced using early ramp-up scheduling to prevent them from overwhelming the supervised source-domain learning signal at the beginning of training.
 
 ---
 
 ## Cross Entropy
 
-Provides **supervised classification learning** on the source domain.
-
----
-
-## CORAL (Correlation Alignment)
-
-Aligns the **covariance matrices** of source and target domain features.
-
----
-
-## MK-MMD (Multiple Kernel Maximum Mean Discrepancy)
-
-A kernel-based distribution alignment method.
-
-It attempts to **match the feature distributions between domains**.
-
----
-
-## Prototype-based Contrastive Learning
-
-Semantic consistency is maintained using **class prototypes**.
-
-This approach:
-
-- strengthens class clustering
-- preserves cross-domain semantic structure
-
----
-
-## Stain Consistency Loss
-
-Histopathology images often contain **staining variations**.
+Cross Entropy provides **supervised classification learning** on labeled source-domain samples.
 
 This loss:
 
-- reduces color variation
-- stabilizes domain adaptation
+- is computed only on source data
+- preserves tissue class discrimination
+- trains the classifier head
 
 ---
 
-# Feature Space Visualization
+## CORAL
 
-To analyze the effect of TriAlign-UDA on domain adaptation, **UMAP visualization** is used.
+**CORAL (Correlation Alignment)** aligns the **second-order statistics** of source and target feature distributions.
 
----
-
-# Baseline Model (B0)
-
-### Before Adaptation
-
-<p align="center">
-<img src="FIGURES/umap_seed0_B0_before.png" width="600">
-</p>
-
-### After Adaptation
-
-<p align="center">
-<img src="FIGURES/umap_seed0_B0_after.png" width="600">
-</p>
-
-In the baseline model, domain separation is still clearly observable.
+It reduces the discrepancy between the covariance matrices of adapted source and target features, helping to minimize statistical domain shift.
 
 ---
 
-# TriAlign Adaptation (B3)
+## MK-MMD
 
-### Before Adaptation
+**MK-MMD (Multiple Kernel Maximum Mean Discrepancy)** is a kernel-based distribution alignment loss.
 
-<p align="center">
-<img src="FIGURES/umap_seed0_B3_before.png" width="600">
-</p>
+It aligns source and target feature distributions using multiple Gaussian kernel scales:
 
-### After Adaptation
+```text
+σ = {1, 2, 4, 8, 16}
+```
 
-<p align="center">
-<img src="FIGURES/umap_seed0_B3_after.png" width="600">
-</p>
+This component helps reduce global distribution mismatch in the shared feature space.
 
-After TriAlign-UDA:
+---
 
-- domain separation significantly decreases
-- class clustering improves
-- cross-domain feature space alignment emerges
+## Prototype-based Semantic Regularization
+
+To preserve semantic class structure, TriAlign-UDA uses **source-domain class prototypes**.
+
+This component:
+
+- computes class prototypes from adapted source features
+- encourages source samples to remain close to their own class centers
+- supports semantic consistency during adaptation
+- helps preserve class-discriminative structure
+
+The prototype-based loss is activated starting from the **third epoch**, since prototype estimates may be unstable during the earliest training stage.
+
+---
+
+## Adversarial Domain Alignment
+
+TriAlign-UDA incorporates adversarial adaptation through a **Gradient Reversal Layer (GRL)** and a domain discriminator.
+
+This component:
+
+- reduces source-target domain separability
+- promotes domain-invariant representations
+- does not require target labels
+- complements statistical and semantic alignment objectives
+
+---
+
+# Training and Evaluation Protocol
+
+TriAlign-UDA is trained under a fixed experimental protocol:
+
+- **Foundation model:** UNI2-H (frozen)
+- **Feature dimension:** 1536
+- **Target subset:** 10,000 unlabeled TCGA patches
+- **Epochs:** 5
+- **Seeds:** 5 random seeds (`0–4`)
+- **Optimizer:** AdamW
+- **Learning rate:** `5 × 10^-4`
+- **Weight decay:** `1 × 10^-4`
+- **Batch size:** 64
+- **Gradient clipping:** 1.0
+
+The **best checkpoint** is selected **only using Macro-F1 on the source validation split**.
+
+The **CRC-VAL-HE-7K dataset is never used** during training, adaptation, hyperparameter tuning, or checkpoint selection.
+
+---
+
+# Baseline Methods
+
+TriAlign-UDA is compared with the following baselines:
+
+| Method | Description |
+|---|---|
+| SourceOnly | Source-supervised classifier without target alignment |
+| DeepCORAL | Source classification with CORAL-based statistical alignment |
+| DAN | Source classification with MK-MMD-based distribution alignment |
+| DANN | Domain-adversarial neural network with GRL |
+| TriAlign-UDA | Hybrid statistical, semantic, and adversarial feature-level adaptation |
+
+All methods use:
+
+- the same frozen UNI2-H features
+- the same source/target splits
+- the same optimization setup
+- the same external evaluation protocol
 
 ---
 
 # Experimental Evaluation
 
-Model performance is evaluated using the following metrics:
+Classification performance is evaluated on **CRC-VAL-HE-7K** using:
 
-- **Macro F1 Score**
-- **Balanced Accuracy**
 - **Accuracy**
+- **Balanced Accuracy**
+- **Macro-F1**
+- **Class-wise F1**
 
-Additionally, domain alignment quality is analyzed using:
+Target-domain alignment quality is also analyzed on the unlabeled TCGA target subset using:
 
-- CORAL Loss
-- MK-MMD Loss
-- Prototype Contrastive Loss
-- Proxy A-Distance
-- Neighborhood Consistency Entropy
+- **CORAL**
+- **MK-MMD**
+- **ProtoDist**
+- **Proxy A-Distance (PAD)**
+- **Neighborhood Consistency Entropy (NC-Entropy)**
+- **Majority**
 
-These metrics provide quantitative evidence of domain adaptation effectiveness.
+These metrics provide complementary evidence about adaptation behavior in frozen feature space.
+
+---
+
+# External Classification Results
+
+Final external classification results on **CRC-VAL-HE-7K** are reported as **mean ± standard deviation over five seeds**.
+
+| Method | Accuracy ↑ | Balanced Accuracy ↑ | Macro-F1 ↑ |
+|---|---:|---:|---:|
+| SourceOnly | 0.9560 ± 0.0158 | 0.9448 ± 0.0145 | 0.9404 ± 0.0157 |
+| DeepCORAL | 0.9283 ± 0.0165 | 0.9250 ± 0.0116 | 0.9160 ± 0.0139 |
+| DAN | 0.9544 ± 0.0071 | 0.9432 ± 0.0042 | 0.9391 ± 0.0063 |
+| DANN | 0.9640 ± 0.0070 | 0.9545 ± 0.0034 | 0.9488 ± 0.0058 |
+| TriAlign-UDA | **0.9669 ± 0.0050** | **0.9560 ± 0.0063** | **0.9515 ± 0.0067** |
+
+TriAlign-UDA achieves the **highest mean Accuracy, Balanced Accuracy, and Macro-F1** among the compared methods on the independent external evaluation set.
+
+DANN provides the closest baseline performance, indicating that adversarial alignment is a strong benchmark in this setting. TriAlign-UDA is therefore positioned as a **balanced hybrid UDA framework** that combines multiple complementary objectives while preserving strong external validation performance.
 
 ---
 
 # Ablation Study
 
-To analyze the contribution of TriAlign-UDA components, the following experimental configurations are evaluated.
+To analyze the contribution of individual components, the following ablation settings are evaluated:
 
-| Model | Components |
-|---|---|
-B0 | Base classifier
-B1 | + CORAL
-B2 | + MK-MMD
-B3 | + Prototype Contrastive
-B4 | + Stain Consistency
+| Variant | CE | CORAL | MK-MMD | Proto | Adv |
+|---|---|---|---|---|---|
+| B0 | ✓ | × | × | × | × |
+| B1 | ✓ | ✓ | × | × | × |
+| B2 | ✓ | ✓ | ✓ | × | × |
+| B3 | ✓ | ✓ | ✓ | ✓ | × |
+| TriAlign-UDA | ✓ | ✓ | ✓ | ✓ | ✓ |
 
-The ablation results demonstrate that each component contributes positively to adaptation performance.
+The ablation results show that:
+
+- adding alignment terms does **not always produce monotonic improvement**
+- the **full TriAlign-UDA configuration** provides the best mean external classification performance
+- the final performance gain emerges from the **balanced combination** of statistical alignment, prototype-based semantic preservation, and adversarial domain alignment
+
+---
+
+# Target-Domain Alignment Analysis
+
+Target-domain alignment quality is evaluated on the unlabeled TCGA subset using feature-level proxy metrics.
+
+These analyses show that:
+
+- strong proxy alignment does **not always guarantee** the best external classification performance
+- external validation performance should be considered alongside target-domain alignment metrics
+- TriAlign-UDA is designed to balance domain alignment and preservation of class-discriminative structure
+
+This perspective is particularly important in histopathology, where aggressive alignment may reduce domain discrepancy while still harming tissue-level discrimination.
 
 ---
 
 # Related Publication
 
-This work is described in detail in the following paper.
+This work is described in detail in the following paper:
 
-**TriAlign-UDA: Multi-Term Feature Alignment for Unsupervised Domain Adaptation in Histopathology**
+**TriAlign UDA: Hybrid Domain Adaptation for Histopathology Foundation Model Features**
 
 📄 *Currently under review*
 
-```
+```bibtex
 @article{trialign2026,
-title={TriAlign-UDA: Multi-Term Feature Alignment for Unsupervised Domain Adaptation in Histopathology},
-author={Anonymous},
-journal={Under Review},
-year={2026}
+  title={TriAlign UDA: Hybrid Domain Adaptation for Histopathology Foundation Model Features},
+  author={Anonymous},
+  journal={Under Review},
+  year={2026}
 }
 ```
+
+---
+
+# Funding
+
+This research was supported by the **Scientific and Technological Research Council of Türkiye (TÜBİTAK)** under the **1002-A Short-Term Support Module**.
+
+---
+
+# Data Availability
+
+The datasets used in this study are publicly available:
+
+- **NCT-CRC-HE-100K / CRC-VAL-HE-7K:** https://zenodo.org/record/1214456
+- **TCGA-COAD / TCGA-READ:** https://portal.gdc.cancer.gov/
+
+No new patient-level clinical data were generated in this study.
 
 ---
 
@@ -266,7 +413,11 @@ year={2026}
 
 This work makes use of the following public datasets:
 
-- NCT-CRC-HE Dataset
-- TCGA COAD / READ
+- **NCT-CRC-HE-100K**
+- **CRC-VAL-HE-7K**
+- **TCGA-COAD**
+- **TCGA-READ**
 
-We thank the original dataset providers.
+We thank the original dataset providers for making these histopathological datasets publicly available.
+
+The TCGA-COAD/READ whole-slide images used in this study were obtained from data generated by the **TCGA Research Network**.
