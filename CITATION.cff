@@ -1,0 +1,12 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it using the metadata below."
+title: "TriAlign UDA for hybrid domain adaptation of frozen histopathology foundation model representations"
+type: software
+authors:
+  - family-names: Ozkan
+    given-names: Merve
+  - family-names: Ozcan
+    given-names: Caner
+repository-code: "https://github.com/MRV-1/TriAlign-UDA"
+version: 1.0.0
+date-released: 2026-10-07
