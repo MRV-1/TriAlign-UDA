@@ -12,7 +12,7 @@ TriAlign-UDA has been specifically evaluated for **colorectal cancer histopathol
 - **Target Domain:** TCGA-COAD / TCGA-READ
 - **External Evaluation Set:** CRC-VAL-HE-7K
 
-The framework improves cross-domain generalization by jointly optimizing:
+The framework addresses cross-domain generalization by jointly optimizing:
 
 - **source-domain class discriminability**
 - **statistical distribution alignment**
@@ -24,7 +24,7 @@ The framework improves cross-domain generalization by jointly optimizing:
 # Architectural Overview
 
 <p align="center">
-  <img src="FIGURES/pipeline2.png" width="950">
+  <img src="FIGURES/pipeline2.svg" width="950">
 </p>
 
 TriAlign-UDA operates on **frozen histopathology foundation model representations** and consists of three main stages/components:
@@ -271,6 +271,9 @@ TriAlign-UDA is trained under a fixed experimental protocol:
 - **Weight decay:** `1 × 10^-4`
 - **Batch size:** 64
 - **Gradient clipping:** 1.0
+- **Final TriAlign-UDA coefficients:** CORAL `0.010`, MK-MMD `0.005`, prototype `0.10`, adversarial `0.10`
+- **Prototype activation:** epoch 3
+- **Alignment/GRL ramp:** linear ramp during the first 2 epochs
 
 The **best checkpoint** is selected **only using Macro-F1 on the source validation split**.
 
@@ -288,14 +291,19 @@ TriAlign-UDA is compared with the following baselines:
 | DeepCORAL | Source classification with CORAL-based statistical alignment |
 | DAN | Source classification with MK-MMD-based distribution alignment |
 | DANN | Domain-adversarial neural network with GRL |
+| EUDA | Frozen-feature bottleneck adaptation with MMD-based alignment |
+| PLADA-f | Feature-level adversarial alignment with prototype/category-level adaptation |
 | TriAlign-UDA | Hybrid statistical, semantic, and adversarial feature-level adaptation |
 
 All methods use:
 
-- the same frozen UNI2-H features
-- the same source/target splits
-- the same optimization setup
+- the same frozen UNI2-H input features
+- the same source training/validation split
+- the same fixed 10,000-sample unlabeled TCGA target subset
+- the same five random seeds
 - the same external evaluation protocol
+
+Method-specific adaptation structures are retained for EUDA and PLADA-f rather than forcing all baselines into the TriAlign-UDA architecture.
 
 ---
 
@@ -331,11 +339,13 @@ Final external classification results on **CRC-VAL-HE-7K** are reported as **mea
 | DeepCORAL | 0.9283 ± 0.0165 | 0.9250 ± 0.0116 | 0.9160 ± 0.0139 |
 | DAN | 0.9544 ± 0.0071 | 0.9432 ± 0.0042 | 0.9391 ± 0.0063 |
 | DANN | 0.9640 ± 0.0070 | 0.9545 ± 0.0034 | 0.9488 ± 0.0058 |
+| EUDA | 0.9640 ± 0.0049 | 0.9539 ± 0.0056 | 0.9493 ± 0.0062 |
+| PLADA-f | 0.9531 ± 0.0136 | 0.9300 ± 0.0277 | 0.9251 ± 0.0263 |
 | TriAlign-UDA | **0.9669 ± 0.0050** | **0.9560 ± 0.0063** | **0.9515 ± 0.0067** |
 
 TriAlign-UDA achieves the **highest mean Accuracy, Balanced Accuracy, and Macro-F1** among the compared methods on the independent external evaluation set.
 
-DANN provides the closest baseline performance, indicating that adversarial alignment is a strong benchmark in this setting. TriAlign-UDA is therefore positioned as a **balanced hybrid UDA framework** that combines multiple complementary objectives while preserving strong external validation performance.
+DANN and EUDA provide the closest external classification results. Paired tests show that the differences between TriAlign-UDA and DANN, EUDA, or PLADA-f do not reach statistical significance; TriAlign-UDA is therefore not positioned as statistically superior to these strong baselines.
 
 ---
 
@@ -356,6 +366,8 @@ The ablation results show that:
 - adding alignment terms does **not always produce monotonic improvement**
 - the **full TriAlign-UDA configuration** provides the best mean external classification performance
 - the final performance gain emerges from the **balanced combination** of statistical alignment, prototype-based semantic preservation, and adversarial domain alignment
+
+The sequential B0-B3 ablations use CORAL `0.05`, MK-MMD `0.05`, and prototype `0.10` where active. The final TriAlign-UDA B4 configuration was selected separately using only the internal source-validation split and uses CORAL `0.010`, MK-MMD `0.005`, prototype `0.10`, and adversarial `0.10`.
 
 ---
 
@@ -384,8 +396,8 @@ This work is described in detail in the following paper:
 ```bibtex
 @article{trialign2026,
   title={TriAlign UDA: Hybrid Domain Adaptation for Histopathology Foundation Model Features},
-  author={Anonymous},
-  journal={Under Review},
+  author={Ozkan, Merve and Ozcan, Caner},
+  journal={Scientific Reports},
   year={2026}
 }
 ```
@@ -394,7 +406,7 @@ This work is described in detail in the following paper:
 
 # Funding
 
-This research was supported by the **Scientific and Technological Research Council of Türkiye (TÜBİTAK)** under the **1002-A Short-Term Support Module**.
+This research was supported by the **Scientific and Technological Research Council of Türkiye (TÜBİTAK)** under the **1002-A Short-Term Support Module** (grant **125E868**).
 
 ---
 
