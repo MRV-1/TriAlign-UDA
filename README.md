@@ -274,7 +274,7 @@ TriAlign-UDA is trained under a fixed experimental protocol:
 - **Weight decay:** `1 × 10^-4`
 - **Batch size:** 64
 - **Gradient clipping:** 1.0
-- **Final TriAlign-UDA coefficients:** CORAL `0.010`, MK-MMD `0.005`, prototype `0.10`, adversarial `0.10`
+- **Final TriAlign-UDA coefficients:** CORAL `0.05`, MK-MMD `0.05`, prototype `0.10`, adversarial `0.05`
 - **Prototype activation:** epoch 3
 - **Alignment/GRL ramp:** linear ramp during the first 2 epochs
 
@@ -370,7 +370,7 @@ The ablation results show that:
 - the **full TriAlign-UDA configuration** provides the best mean external classification performance
 - the final performance gain emerges from the **balanced combination** of statistical alignment, prototype-based semantic preservation, and adversarial domain alignment
 
-The sequential B0-B3 ablations use CORAL `0.05`, MK-MMD `0.05`, and prototype `0.10` where active. The final TriAlign-UDA B4 configuration was selected separately using only the internal source-validation split and uses CORAL `0.010`, MK-MMD `0.005`, prototype `0.10`, and adversarial `0.10`.
+The sequential ablations follow the same fixed manuscript weights where the corresponding components are active: B0 uses cross-entropy only, B1 adds CORAL, B2 adds MK-MMD, B3 adds prototype-based semantic regularization, and the full TriAlign-UDA configuration adds adversarial domain alignment.
 
 ---
 
