@@ -387,6 +387,12 @@ This perspective is particularly important in histopathology, where aggressive a
 
 ---
 
+# Code Availability
+
+The source code is publicly available in this GitHub repository. The archived v1.0.0 release corresponding to the manuscript is available on Zenodo: **10.5281/zenodo.23206094**.
+
+---
+
 # Related Publication
 
 This work is described in detail in the following paper:
