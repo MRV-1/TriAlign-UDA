@@ -29,6 +29,9 @@ The framework addresses cross-domain generalization by jointly optimizing:
 
 TriAlign-UDA operates on **frozen histopathology foundation model representations** and consists of three main stages/components:
 
+A concise reference implementation is provided in [`notebooks/TriAlign_UDA.ipynb`](notebooks/TriAlign_UDA.ipynb).
+
+
 ### 1. Frozen Feature Backbone
 
 The model uses a **pretrained UNI2-H encoder** as the feature extractor.
