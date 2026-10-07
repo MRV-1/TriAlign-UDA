@@ -1,6 +1,5 @@
 # TriAlign UDA for hybrid domain adaptation of frozen histopathology foundation model representations
 
-### Hybrid Domain Adaptation for Histopathology Foundation Model Features
 
 TriAlign-UDA is a **hybrid feature-level Unsupervised Domain Adaptation (UDA) framework developed for histopathology foundation model features**.
 
