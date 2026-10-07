@@ -1,4 +1,4 @@
-# Data and feature-cache layout
+# Data and feature cache layout
 
 The released notebooks operate on pre-extracted frozen UNI2-H feature representations and do not redistribute the underlying datasets.
 
