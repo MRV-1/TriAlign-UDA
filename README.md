@@ -392,13 +392,13 @@ This perspective is particularly important in histopathology, where aggressive a
 
 This work is described in detail in the following paper:
 
-**TriAlign UDA: Hybrid Domain Adaptation for Histopathology Foundation Model Features**
+**TriAlign UDA for hybrid domain adaptation of frozen histopathology foundation model representations**
 
 📄 *Currently under review*
 
 ```bibtex
 @article{trialign2026,
-  title={TriAlign UDA: Hybrid Domain Adaptation for Histopathology Foundation Model Features},
+  title={TriAlign UDA for hybrid domain adaptation of frozen histopathology foundation model representations},
   author={Ozkan, Merve and Ozcan, Caner},
   journal={Scientific Reports},
   year={2026}
