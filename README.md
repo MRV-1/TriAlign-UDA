@@ -1,4 +1,4 @@
-# TriAlign-UDA
+# TriAlign UDA for hybrid domain adaptation of frozen histopathology foundation model representations
 
 ### Hybrid Domain Adaptation for Histopathology Foundation Model Features
 
