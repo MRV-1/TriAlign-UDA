@@ -1,21 +1,14 @@
-# %%
-# ============================================================
-# TriAlign-UDA — Final Notebook Code
-# Hybrid Domain Adaptation for Histopathology Foundation Model Features
-# ============================================================
-# This file contains the code cells intended for the UDA notebook.
-# Copy each # %% section into a separate notebook cell if desired.
-# The protocol follows the manuscript setting:
-#   - Frozen UNI2-H features
-#   - Labeled source domain: NCT-CRC-HE-100K
-#   - Unlabeled target domain: TCGA-COAD/READ
-#   - External evaluation only: CRC-VAL-HE-7K
-#   - Checkpoint selection only on source-validation Macro-F1
-# ============================================================
+#!/usr/bin/env python
+# coding: utf-8
+
+# TriAlign-UDA final manuscript code
+# Exported from notebooks/01_trialign_uda_final.ipynb
+# CRC-VAL-HE-7K is external evaluation only; checkpoint selection uses source-validation Macro-F1.
 
 
 # %%
-# Notebook cell 1
+# Notebook code cell 1
+
 # ============================================================
 # 1) Imports, paths, config
 # ============================================================
@@ -33,7 +26,6 @@ import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader
 
 from tqdm.auto import tqdm
-from IPython.display import display
 from sklearn.metrics import (accuracy_score,balanced_accuracy_score,f1_score,precision_recall_fscore_support,confusion_matrix,)
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import train_test_split
@@ -76,19 +68,9 @@ def save_df(df, csv_path, xlsx_path=None):
 # -------------------------
 # Project/cache paths
 # -------------------------
-# These paths are intentionally configurable so the notebook can be shared on GitHub.
-# Option 1: edit PROJECT_ROOT and CACHE_DIR directly below.
-# Option 2: set environment variables before running the notebook:
-#   export TRIALIGN_PROJECT_ROOT=/path/to/TriAlign-UDA
-#   export TRIALIGN_CACHE_DIR=/path/to/uni2_h_feature_cache
-PROJECT_ROOT = os.environ.get(
-    "TRIALIGN_PROJECT_ROOT",
-    to_wsl_path(r"C:\home\merve\UNI2-h\TriAlign-UDA")
-)
-CACHE_DIR = os.environ.get(
-    "TRIALIGN_CACHE_DIR",
-    "/mnt/c/home/merve/UNI2-h/cache/uni2_h"
-)
+PROJECT_ROOT_WIN = r"C:\home\merve\UNI2-h\TriAlign-UDA"
+PROJECT_ROOT = to_wsl_path(PROJECT_ROOT_WIN)
+CACHE_DIR = "/mnt/c/home/merve/UNI2-h/cache/uni2_h"
 
 NCT_X_PATH  = os.path.join(CACHE_DIR, "nct_rgb.npy")
 NCT_Y_PATH  = os.path.join(CACHE_DIR, "nct_labels_trafiq_order.npy")
@@ -98,16 +80,13 @@ TCGA_X_PATH = os.path.join(CACHE_DIR, "tcga_rgb.npy")
 CLASS_NAMES_PATH = os.path.join(CACHE_DIR, "class_names_trafiq_order.npy")
 
 # -------------------------
-# Run configuration
+# Run preset
 # -------------------------
-# This notebook implements the final paper protocol.
-# Best checkpoint selection:
-#   NCT-CRC-HE-100K is split into source-train and source-validation subsets.
-#   The best checkpoint is selected only by source-validation Macro-F1.
-# External evaluation:
-#   CRC-VAL-HE-7K is never used during training, adaptation, hyperparameter tuning,
-#   or checkpoint selection. It is used only for independent external evaluation.
-RUN_ID = "trialign_uda_final_" + datetime.now().strftime("%Y%m%d_%H%M%S")
+# "sweep" : seed=0 B4 hyperparameter screening only
+# "final" : 5-seed final protocol with baselines + ablation
+RUN_PRESET = "final"
+
+RUN_ID = f"feature_level_v2_{RUN_PRESET}_" + datetime.now().strftime("%Y%m%d_%H%M%S")
 RUN_DIR = ensure_dir(os.path.join(PROJECT_ROOT, "runs", RUN_ID))
 CKPT_DIR = ensure_dir(os.path.join(RUN_DIR, "checkpoints"))
 LOG_DIR = ensure_dir(os.path.join(RUN_DIR, "logs"))
@@ -122,7 +101,8 @@ FEATURE_DIM = 1536
 NUM_CLASSES = 9
 ADAPTER_REDUCTION = 16
 
-SEEDS = [0, 1, 2, 3, 4]
+SEEDS_FINAL = [0, 1, 2,3,4]
+SEEDS_SWEEP = [0]
 EPOCHS = 5
 BATCH_SIZE = 64
 EVAL_BATCH_SIZE = 64
@@ -144,41 +124,54 @@ PROTO_MAX_BATCHES = 200
 KNN_K = 25
 PAD_MAX_SAMPLES = 5000
 
-# Final TriAlign-UDA configuration used in the manuscript:
-#   CE + CORAL + MK-MMD + prototype-based semantic regularization + adversarial alignment.
-# Prototype regularization starts from epoch 3 because early prototypes can be unstable.
-TRIALIGN_UDA_CONFIG = dict(
-    coral=0.05,
-    mkmmd=0.05,
+# If final protocol is used, this is the selected B4 setting.
+CHOSEN_B4 = dict(
+    coral=0.010,
+    mkmmd=0.005,
     proto=0.10,
-    dann=0.05,
+    dann=0.10,
     proto_start=3
 )
 
+B4_SWEEP_CONFIGS = {
+    "B4_A": dict(coral=0.05, mkmmd=0.05, proto=0.05, dann=0.05, proto_start=3),
+    "B4_B": dict(coral=0.05, mkmmd=0.05, proto=0.10, dann=0.05, proto_start=3),
+    "B4_C": dict(coral=0.05, mkmmd=0.05, proto=0.05, dann=0.10, proto_start=3),
+    "B4_D": dict(coral=0.10, mkmmd=0.05, proto=0.05, dann=0.05, proto_start=3),
+    "B4_E": dict(coral=0.10, mkmmd=0.05, proto=0.10, dann=0.05, proto_start=3),
+    "B4_F": dict(coral=0.05, mkmmd=0.10, proto=0.05, dann=0.05, proto_start=3),
+}
+
 METHOD_CONFIGS = {
-    # Ablation variants
+    # Ablation
     "B0_CE":                 dict(coral=0.00, mkmmd=0.00, proto=0.00, dann=0.00, proto_start=999),
     "B1_CE_CORAL":          dict(coral=0.05, mkmmd=0.00, proto=0.00, dann=0.00, proto_start=999),
     "B2_CE_CORAL_MKMMD":    dict(coral=0.05, mkmmd=0.05, proto=0.00, dann=0.00, proto_start=999),
     "B3_STAT_PROTO":        dict(coral=0.05, mkmmd=0.05, proto=0.10, dann=0.00, proto_start=3),
-    "TriAlign_UDA":         TRIALIGN_UDA_CONFIG,
+    "TriAlign_UDA":         CHOSEN_B4,
 
-    # Baseline methods
+    # Baselines
     "SourceOnly":           dict(coral=0.00, mkmmd=0.00, proto=0.00, dann=0.00, proto_start=999),
     "DeepCORAL":            dict(coral=0.05, mkmmd=0.00, proto=0.00, dann=0.00, proto_start=999),
     "DAN":                  dict(coral=0.00, mkmmd=0.05, proto=0.00, dann=0.00, proto_start=999),
     "DANN":                 dict(coral=0.00, mkmmd=0.00, proto=0.00, dann=0.10, proto_start=999),
 }
+METHOD_CONFIGS.update(B4_SWEEP_CONFIGS)
 
-METHODS_TO_RUN = [
+SWEEP_METHODS = list(B4_SWEEP_CONFIGS.keys())
+FINAL_METHODS = [
     "B0_CE", "B1_CE_CORAL", "B2_CE_CORAL_MKMMD", "B3_STAT_PROTO", "TriAlign_UDA",
     "SourceOnly", "DeepCORAL", "DAN", "DANN"
 ]
+
+METHODS_TO_RUN = SWEEP_METHODS if RUN_PRESET == "sweep" else FINAL_METHODS
+SEEDS = SEEDS_SWEEP if RUN_PRESET == "sweep" else SEEDS_FINAL
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print("RUN_ID:", RUN_ID)
 print("RUN_DIR:", RUN_DIR)
 print("Device:", device)
+print("Preset:", RUN_PRESET)
 print("Seeds:", SEEDS)
 print("Methods:", METHODS_TO_RUN)
 
@@ -187,7 +180,8 @@ save_json(CONFIG, os.path.join(CONFIG_DIR, "config.json"))
 
 
 # %%
-# Notebook cell 2
+# Notebook code cell 2
+
 # ============================================================
 # 2) Data loading
 # ============================================================
@@ -314,7 +308,8 @@ src_loader, src_val_loader, crc_ext_loader, tgt_loader, CLASS_NAMES = make_loade
 
 
 # %%
-# Notebook cell 3
+# Notebook code cell 3
+
 # ============================================================
 # 3) Models and losses
 # ============================================================
@@ -423,7 +418,8 @@ def domain_loss(domain_disc, fs, ft, lambd):
 
 
 # %%
-# Notebook cell 4
+# Notebook code cell 4
+
 # ============================================================
 # 4) Evaluation metrics
 # ============================================================
@@ -724,7 +720,8 @@ def evaluate(adapter, head, seed, n_batches):
 
 
 # %%
-# Notebook cell 5
+# Notebook code cell 5
+
 # ============================================================
 # 5) Training one method/seed
 # ============================================================
@@ -879,7 +876,8 @@ def train_one(method, seed):
 
 
 # %%
-# Notebook cell 6
+# Notebook code cell 6
+
 # ============================================================
 # 6) Run experiments
 # ============================================================
@@ -899,7 +897,8 @@ seed_results_df
 
 
 # %%
-# Notebook cell 7
+# Notebook code cell 7
+
 # ============================================================
 # 7) Summary tables, rankings, paired tests
 # ============================================================
@@ -984,7 +983,8 @@ display(ranking)
 
 
 # %%
-# Notebook cell 8
+# Notebook code cell 8
+
 # ============================================================
 # 8) Convergence diagnostics from existing epoch logs
 # ============================================================
@@ -1015,7 +1015,7 @@ display(epoch_delta.head())
 
 
 # %%
-# Notebook cell 9
+# Notebook code cell 9
 # ============================================================
 # 9) Aggregate class-wise CRC-VAL diagnostics
 # ============================================================
@@ -1106,9 +1106,8 @@ if classwise_summary is not None:
 else:
     print("Class-wise summary could not be displayed because no class-wise files were found.")
 
-
 # %%
-# Notebook cell 10
+# Notebook code cell 10
 # ============================================================
 # 10) Computational cost summary
 # No retraining is performed in this cell.
@@ -1173,3 +1172,10 @@ save_df(
 )
 
 display(computation_table)
+
+# %%
+# Notebook code cell 11
+
+
+# %%
+# Notebook code cell 12
