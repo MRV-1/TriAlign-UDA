@@ -24,7 +24,7 @@ The framework addresses cross-domain generalization by jointly optimizing:
 # Architectural Overview
 
 <p align="center">
-  <img src="FIGURES/UDA_pipeline.png" width="950">
+  <img src="FIGURES/UDA_pipeline.png" width="500">
 </p>
 
 TriAlign-UDA operates on **frozen histopathology foundation model representations** and consists of three main stages/components:
